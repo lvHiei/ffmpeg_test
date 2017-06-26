@@ -65,9 +65,6 @@ void VVFilterUtil::initFilter(const char* videoFile, const char* picFile, const 
 			"movie=%s[mf];[mf]rotate=ow=300:oh=300:a=%d:fillcolor=none[rf];[in][rf]overlay=x=40:y=100[out]",
 			m_pPicFilterName, m_iFilterAngle
 			);
-
-//	m_pYUVFILE = fopen(m_pOutVideoFile, "wb");
-
 }
 
 void VVFilterUtil::setFilterParam(int angle, long* param, int count)
@@ -189,21 +186,6 @@ void VVFilterUtil::onGotDecodedVideoFrame()
 			break;
 		}
 
-//		for(int i = 0; i < m_pFrameOut->height; ++i){
-//			fwrite(m_pFrameOut->data[0] + i*m_pFrameOut->linesize[0], m_pFrameOut->width, 1, m_pYUVFILE);
-//		}
-//
-//		for(int i = 0; i < m_pFrameOut->height/2; ++i){
-//			fwrite(m_pFrameOut->data[1] + i*m_pFrameOut->linesize[1], m_pFrameOut->width/2, 1, m_pYUVFILE);
-//		}
-//		for(int i = 0; i < m_pFrameOut->height/2; ++i){
-//			fwrite(m_pFrameOut->data[2] + i*m_pFrameOut->linesize[2], m_pFrameOut->width/2, 1, m_pYUVFILE);
-//		}
-
-//		fwrite(m_pFrameOut->data[0], 352*640, 1, m_pYUVFILE);
-//		fwrite(m_pFrameOut->data[1], 352*640/4, 1, m_pYUVFILE);
-//		fwrite(m_pFrameOut->data[2], 352*640, 1, m_pYUVFILE);
-
 		got_frame = 0;
 		ret = avcodec_encode_video2(m_pEncodeCodecContext, &m_EncodePacket, m_pFrameOut, &got_frame);
 		if(ret < 0){
@@ -229,6 +211,7 @@ void VVFilterUtil::onGotDecodedVideoFrame()
 int VVFilterUtil::open_input_file()
 {
 	int ret;
+	AVCodec* pEncodeCodec;
 
 	if((ret = avformat_open_input(&m_pFormatCtx, m_pVideoFileName, NULL, NULL)) < 0){
 		LOGE("avformat_open_input failed, ret=%d,file=%s", ret, m_pVideoFileName);
@@ -248,12 +231,26 @@ int VVFilterUtil::open_input_file()
     	return ret;
     }
 
-    // find video stream and copy context
+    // find video encoder
+    for (int i = 0; i < m_pFormatCtx->nb_streams; i++) {
+    	if(m_pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO){
+    		AVStream *in_stream = m_pFormatCtx->streams[i];
+            pEncodeCodec = avcodec_find_encoder(in_stream->codec->codec_id);
+            if(!pEncodeCodec){
+            	LOGE("find video encoder failed!");
+            	return -1;
+            }
+
+            break;
+    	}
+    }
+
+    // find video stream and set context
     for (int i = 0; i < m_pFormatCtx->nb_streams; i++) {
         //Create output AVStream according to input AVStream
         if(m_pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO){
             AVStream *in_stream = m_pFormatCtx->streams[i];
-            AVStream *out_stream = avformat_new_stream(m_pOutFormatCtx, in_stream->codec->codec);
+            AVStream *out_stream = avformat_new_stream(m_pOutFormatCtx, pEncodeCodec);
             if (!out_stream) {
                 LOGE("alloc output video stream failed.");
             }
@@ -261,12 +258,8 @@ int VVFilterUtil::open_input_file()
             m_iVideoIdxIn = ret;
             m_iVideoIdxOut = out_stream->index;
 
-            //Copy the settings of AVCodecContext
-//            if (avcodec_copy_context(out_stream->codec, in_stream->codec) < 0) {
-//                LOGE("copy video context failed.");
-//            }
         	m_pDecodeCodecContext = in_stream->codec;
-//            m_pEncodeCodecContext = avcodec_alloc_context3(m_pDecodeCodecContext->codec);
+            m_pEncodeCodecContext = out_stream->codec;
 
             out_stream->codec->codec_tag = 0;
             if (m_pOutFormatCtx->oformat->flags & AVFMT_GLOBALHEADER){
@@ -303,9 +296,6 @@ int VVFilterUtil::open_input_file()
         }
     }
 
-
-
-
     // find and open decoder
     AVCodec* pDecodeCodec = avcodec_find_decoder(m_pDecodeCodecContext->codec_id);
     if(pDecodeCodec == NULL){
@@ -318,14 +308,8 @@ int VVFilterUtil::open_input_file()
 		return ret;
 	}
 
-	// find and open encoder
-    AVCodec* pEncodeCodec = avcodec_find_encoder(m_pDecodeCodecContext->codec_id);
-    if(pEncodeCodec == NULL){
-        LOGE("pEncodeCodec not found.");
-        return -1;
-    }
-
-	m_pEncodeCodecContext = avcodec_alloc_context3(pEncodeCodec);
+	// open encoder
+//	m_pEncodeCodecContext = avcodec_alloc_context3(pEncodeCodec);
 
     //H264
     AVDictionary* param = NULL;
@@ -334,7 +318,6 @@ int VVFilterUtil::open_input_file()
         av_dict_set(&param, "tune","zerolatency", 0);
         av_dict_set(&param, "rc-lookahead", 0, 0);
         av_dict_set(&param, "profile", "baseline", 0);
-
     }
 
     // copy 房间的设置
@@ -343,7 +326,8 @@ int VVFilterUtil::open_input_file()
     m_pEncodeCodecContext->height = m_pDecodeCodecContext->height;
     m_pEncodeCodecContext->time_base.num = 1;
     m_pEncodeCodecContext->time_base.den = 15;
-    m_pEncodeCodecContext->bit_rate = 800*1000;
+//    m_pEncodeCodecContext->bit_rate = 800*1000;
+    m_pEncodeCodecContext->bit_rate = m_pDecodeCodecContext->bit_rate;
 //    m_pEncodeCodecContext->time_base = m_pDecodeCodecContext->framerate;
 
     m_pEncodeCodecContext->thread_count = 0;
@@ -362,8 +346,6 @@ int VVFilterUtil::open_input_file()
     {
     	m_pEncodeCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
     }
-
-    m_pOutFormatCtx->streams[m_iVideoIdxOut]->codec = m_pEncodeCodecContext;
 
 	if((ret = avcodec_open2(m_pEncodeCodecContext, pEncodeCodec, &param)) < 0){
 		char es[1024];
@@ -474,6 +456,7 @@ void VVFilterUtil::release()
 
 	if(m_pEncodeCodecContext){
 		avcodec_close(m_pEncodeCodecContext);
+//		avcodec_free_context(&m_pEncodeCodecContext);
 		m_pEncodeCodecContext = NULL;
 	}
 
@@ -491,6 +474,4 @@ void VVFilterUtil::release()
 
 	    m_pOutFormatCtx = NULL;
 	}
-
-//	fclose(m_pYUVFILE);
 }
