@@ -7,17 +7,7 @@
 
 #include "VVFilterUtil.h"
 
-
-//#define LOGD printf
-//#define LOGI printf
-//#define LOGW printf
-//#define LOGE printf
-
-#define LOGD(FMT, ...) printf(FMT, ##__VA_ARGS__);printf("\n")
-#define LOGI(FMT, ...) printf(FMT, ##__VA_ARGS__);printf("\n")
-#define LOGW(FMT, ...) printf(FMT, ##__VA_ARGS__);printf("\n")
-#define LOGE(FMT, ...) printf(FMT, ##__VA_ARGS__);printf("\n")
-
+#include "../util/logUtil.h"
 
 VVFilterUtil::VVFilterUtil()
 	: m_pFormatCtx(NULL),

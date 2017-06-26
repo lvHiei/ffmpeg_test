@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <unistd.h>
 #include "LocalVideo.h"
-#include "TimeUtil.h"
-#include "AVUtil.h"
+#include "../util/TimeUtil.h"
+#include "../util/AVUtil.h"
 
 #define LOGD printf
 #define LOGI printf

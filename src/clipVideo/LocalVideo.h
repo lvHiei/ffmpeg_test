@@ -7,7 +7,7 @@
 
 #include <pthread.h>
 
-#include "const.h"
+#include "../util/const.h"
 
 extern "C"{
 #include "libavformat/avformat.h"
