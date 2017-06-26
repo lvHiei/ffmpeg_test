@@ -12,6 +12,7 @@ using namespace std;
 
 #include "clipVideo/LocalVideo.h"
 #include "avfilter/VVFilterUtil.h"
+#include "avspeed/AVSpeed.h"
 
 void testFilter()
 {
@@ -52,10 +53,42 @@ void testLocalVideo()
 	pVideo->initDecoder();
 }
 
+void testSpeed()
+{
+
+	float speed = 1.5f;
+
+	const char* path = "/home/mj/disk/videotest/2017/06/26/";
+	const char* videoFile = "test_120.flv";
+	const char* outFile = "speed_%1.1f.flv";
+
+	char absVideo[1024] = {0};
+	char absOut[1024] = {0};
+	char out[1024] = {0};
+	sprintf(out, outFile, speed);
+
+	strcat(absVideo, path);
+	strcat(absVideo, videoFile);
+
+	strcat(absOut, path);
+	strcat(absOut, out);
+
+	AVSpeed* pSpeed = new AVSpeed();
+	pSpeed->initFile(absVideo, absOut);
+	pSpeed->setSpeed(speed);
+	pSpeed->start();
+
+	pthread_join(pSpeed->getThreadId(), NULL);
+
+	delete pSpeed;
+}
+
 int main() {
 //	testLocalVideo();
 
-	testFilter();
+//	testFilter();
+
+	testSpeed();
 
 //	printf("hello world");
 
