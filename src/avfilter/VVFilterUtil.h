@@ -25,7 +25,7 @@ extern "C"
 #include "libswscale/swscale.h"
 }
 
-#define VV_FILE_NAME_MAX 1024
+#include "../util/const.h"
 
 class VVFilterUtil {
 public:
@@ -70,12 +70,12 @@ private:
 
 	FILE* m_pYUVFILE;
 
-	char m_pFilterDescr[VV_FILE_NAME_MAX];
+	char m_pFilterDescr[VV_FILENAME_MAX];
 
 private:
-	char m_pVideoFileName[VV_FILE_NAME_MAX];
-	char m_pPicFilterName[VV_FILE_NAME_MAX];
-	char m_pOutVideoFile[VV_FILE_NAME_MAX];
+	char m_pVideoFileName[VV_FILENAME_MAX];
+	char m_pPicFilterName[VV_FILENAME_MAX];
+	char m_pOutVideoFile[VV_FILENAME_MAX];
 
 	int m_iFilterCount;
 	int m_iFilterAngle;

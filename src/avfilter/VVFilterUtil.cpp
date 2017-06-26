@@ -38,15 +38,15 @@ void VVFilterUtil::initFilter(const char* videoFile, const char* picFile, const 
 	av_register_all();
     avfilter_register_all();
 
-	memset(m_pVideoFileName, 0, VV_FILE_NAME_MAX);
-	memset(m_pPicFilterName, 0, VV_FILE_NAME_MAX);
-	memset(m_pOutVideoFile, 0, VV_FILE_NAME_MAX);
+	memset(m_pVideoFileName, 0, VV_FILENAME_MAX);
+	memset(m_pPicFilterName, 0, VV_FILENAME_MAX);
+	memset(m_pOutVideoFile, 0, VV_FILENAME_MAX);
 
 	strcpy(m_pVideoFileName, videoFile);
 	strcpy(m_pPicFilterName, picFile);
 	strcpy(m_pOutVideoFile, outVideoFile);
 
-	memset(m_pFilterDescr, 0, VV_FILE_NAME_MAX);
+	memset(m_pFilterDescr, 0, VV_FILENAME_MAX);
 //	sprintf(m_pFilterDescr,
 //			"movie=%s[mf];[mf]rotate=ow=300:oh=300:a=%d:fillcolor=red[rf];[rf]colorkey=red:0.1:0.2[cf];[in][cf]overlay=x=40:y=100[out]",
 //			m_pPicFilterName, m_iFilterAngle
@@ -66,7 +66,7 @@ void VVFilterUtil::setFilterParam(int angle, long* param, int count)
 
 void VVFilterUtil::setFilterDescr(const char* filterDescr)
 {
-	memset(m_pFilterDescr, 0, FILENAME_MAX);
+	memset(m_pFilterDescr, 0, VV_FILENAME_MAX);
 	strcpy(m_pFilterDescr, filterDescr);
 }
 
