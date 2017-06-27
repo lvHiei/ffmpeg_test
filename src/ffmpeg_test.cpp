@@ -86,9 +86,9 @@ void testSpeed()
 int main() {
 //	testLocalVideo();
 
-//	testFilter();
+	testFilter();
 
-	testSpeed();
+//	testSpeed();
 
 //	printf("hello world");
 

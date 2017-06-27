@@ -374,7 +374,8 @@ int VVFilterUtil::init_filters()
     char args[512];
     int ret;
     AVFilter *buffersrc  = avfilter_get_by_name("buffer");
-    AVFilter *buffersink = avfilter_get_by_name("ffbuffersink");
+//    AVFilter *buffersink = avfilter_get_by_name("ffbuffersink");
+    AVFilter *buffersink = avfilter_get_by_name("buffersink");
     AVFilterInOut *outputs = avfilter_inout_alloc();
     AVFilterInOut *inputs  = avfilter_inout_alloc();
     enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P, AV_PIX_FMT_NONE };
