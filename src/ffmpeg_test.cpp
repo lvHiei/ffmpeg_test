@@ -12,6 +12,7 @@ using namespace std;
 
 #include "clipVideo/LocalVideo.h"
 #include "avfilter/VVFilterUtil.h"
+#include "avfilter/VVFilterUtilPure.h"
 #include "avspeed/AVSpeed.h"
 
 void testFilter()
@@ -83,14 +84,91 @@ void testSpeed()
 	delete pSpeed;
 }
 
+
+void testPureFilter()
+{
+	AVCodec* codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	AVCodecContext* pCodecContext = avcodec_alloc_context3(codec);
+	pCodecContext->width = 360;
+	pCodecContext->height = 640;
+	pCodecContext->pix_fmt = AV_PIX_FMT_YUV420P;
+	pCodecContext->time_base = AVRational{1, 25};
+	pCodecContext->sample_aspect_ratio = AVRational{9, 16};
+
+	int stride =  pCodecContext->width * pCodecContext->height;
+
+	const char* filterdes = "movie=/home/mj/disk/videotest/2017/07/13/filter.png[mf];[in][mf]overlay=x=main_w-overlay_w-20:y=20[out]";
+
+	VVFilterUtilPure* pFilter = new VVFilterUtilPure(AVFILTER_VIDEO, pCodecContext);
+	pFilter->setFilterDescr(filterdes);
+	pFilter->initFilter();
+
+	FILE* pFile = fopen("/home/mj/disk/videotest/2017/07/13/360_640.yuv", "r");
+	FILE* pOutFile = fopen("/home/mj/disk/videotest/2017/07/13/360_640f.yuv", "w");
+
+	int read_len = pCodecContext->width*pCodecContext->height*3/2;
+
+	uint8_t* originData = (uint8_t*)malloc(read_len);
+
+	AVFrame* pOriginFrame = av_frame_alloc();
+	AVFrame* pFilterFrame = av_frame_alloc();
+
+	pOriginFrame->width = pCodecContext->width;
+	pOriginFrame->height = pCodecContext->height;
+	pOriginFrame->format = pCodecContext->pix_fmt;
+
+	av_image_fill_arrays(pOriginFrame->data, pOriginFrame->linesize, originData,
+			AV_PIX_FMT_YUV420P,pCodecContext->width , pCodecContext->height,1);
+	pOriginFrame->data[0] = originData;
+	pOriginFrame->data[1] = originData + stride;
+	pOriginFrame->data[2] = originData + stride * 5/4;
+
+	SwsContext* m_pImgConvertCtx = sws_getContext(pCodecContext->width, pCodecContext->height, pCodecContext->pix_fmt,
+									pCodecContext->width, pCodecContext->height, AV_PIX_FMT_YUV420P,
+                                      SWS_BICUBIC, NULL, NULL, NULL);
+
+    int pts = 0;
+	while(1)
+	{
+		int aread_len = fread(originData, 1, read_len, pFile);
+
+		if(aread_len != read_len){
+			break;
+		}
+
+		pOriginFrame->pts = pts++;
+		pFilter->processFilter(pOriginFrame, pFilterFrame);
+
+	    sws_scale(m_pImgConvertCtx, (const uint8_t* const*)pFilterFrame->data, pFilterFrame->linesize, 0, pCodecContext->height,
+	    		pOriginFrame->data, pOriginFrame->linesize);
+
+		av_frame_unref(pFilterFrame);
+		fwrite(originData, 1, read_len, pOutFile);
+		printf("write 1 frame\n");
+	}
+
+
+	fclose(pFile);
+	fclose(pOutFile);
+
+	av_frame_free(&pOriginFrame);
+	av_frame_free(&pFilterFrame);
+
+	sws_freeContext(m_pImgConvertCtx);
+
+	free(originData);
+	delete pFilter;
+}
+
 int main() {
 //	testLocalVideo();
 
-	testFilter();
+//	testFilter();
 
 //	testSpeed();
 
-//	printf("hello world");
 
+	testPureFilter();
+	printf("hello world");
 	return 0;
 }

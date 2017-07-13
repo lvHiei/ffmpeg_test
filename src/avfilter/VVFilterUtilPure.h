@@ -28,13 +28,12 @@ public:
 	virtual void onGotFilteredFrame(AVFrame* frame) = 0;
 };
 
-class VVFilterUtilPure {
-public:
-	enum VVAVFilterType{
-		AVFILTER_VIDEO,
-		AVFILTER_AUDIO,
-	};
+enum VVAVFilterType{
+	AVFILTER_VIDEO,
+	AVFILTER_AUDIO,
+};
 
+class VVFilterUtilPure {
 public:
 	VVFilterUtilPure(VVAVFilterType type, AVCodecContext* codecCtx);
 	virtual ~VVFilterUtilPure();

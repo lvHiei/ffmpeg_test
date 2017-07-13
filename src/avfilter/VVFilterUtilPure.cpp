@@ -203,17 +203,17 @@ int VVFilterUtilPure::processFilter(AVFrame* orginFrame, AVFrame* outputFrame)
 		LOGE("av_buffersrc_add_frame failed, ret=%d", ret);
 	}
 
-	while(true){
+	while(true)
+	{
 		ret = av_buffersink_get_frame(m_pBufferSinkCtx, outputFrame);
-		if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
+		if(ret == AVERROR(EAGAIN) || ret == AVERROR_EOF || ret < 0){
 			break;
 		}
 
 		if(m_pCallback){
 			m_pCallback->onGotFilteredFrame(outputFrame);
+			av_frame_unref(outputFrame);
 		}
-
-		av_frame_unref(outputFrame);
 	}
 
 	return 0;
