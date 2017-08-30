@@ -14,6 +14,7 @@ using namespace std;
 #include "avfilter/VVFilterUtil.h"
 #include "avfilter/VVFilterUtilPure.h"
 #include "avspeed/AVSpeed.h"
+#include "format/VVAVFormat.h"
 
 void testFilter()
 {
@@ -56,12 +57,14 @@ void testLocalVideo()
 
 void testSpeed()
 {
-
-	float speed = 1.5f;
+//	float speed = 0.5f;
+//	float speed = 1.0f;
+//	float speed = 1.5f;
+	float speed = 2.0f;
 
 	const char* path = "/home/mj/disk/videotest/2017/06/26/";
 	const char* videoFile = "test_120.flv";
-	const char* outFile = "speed_%1.1f.flv";
+	const char* outFile = "speed_video_%1.1f.flv";
 
 	char absVideo[1024] = {0};
 	char absOut[1024] = {0};
@@ -160,6 +163,68 @@ void testPureFilter()
 	delete pFilter;
 }
 
+void testFormat(){
+	const char* in_file = "/home/mj/disk/videotest/2017/08/25/format_test.mp4";
+	const char* out_file = "/home/mj/disk/videotest/2017/08/25/out_format.mp4";
+	const char* out_file_faststart = "/home/mj/disk/videotest/2017/08/25/out_format_faststart.mp4";
+
+	VVAVFormat* pVVFormat = new VVAVFormat();
+
+	AVFormatContext* pIFCtx = pVVFormat->alloc_foramt_context();
+	AVFormatContext* pOFCtx = pVVFormat->alloc_foramt_context();
+
+    int iAudioIndex;
+    int iVideoIndex;
+    int oAudioIndex;
+    int oVideoIndex;
+
+    int ret = 0;
+
+
+//	ret = pVVFormat->open_in_out_file(&pIFCtx, in_file, iAudioIndex, iVideoIndex,
+//			&pOFCtx, out_file, oAudioIndex, oVideoIndex);
+	ret = pVVFormat->open_in_out_file(&pIFCtx, in_file, iAudioIndex, iVideoIndex,
+			&pOFCtx, out_file_faststart, oAudioIndex, oVideoIndex);
+
+	if(ret < 0){
+		goto fail;
+	}
+
+	printf("ia:%d,iv:%d,oa:%d,ov:%d\n", iAudioIndex, iVideoIndex, oAudioIndex, oVideoIndex);
+
+//	ret = pVVFormat->write_hearder(pOFCtx);
+	ret = pVVFormat->write_mp4_header(pOFCtx, true);
+	if(ret < 0){
+		goto fail;
+	}
+
+	AVPacket packet;
+
+	while(true){
+		if(pVVFormat->read_packet(pIFCtx, &packet) < 0){
+			break;
+		}
+
+		if(packet.stream_index == iAudioIndex){
+			packet.stream_index = oAudioIndex;
+		}else if(packet.stream_index == iVideoIndex){
+			packet.stream_index = oVideoIndex;
+		}
+
+		pVVFormat->write_packet(pOFCtx, packet);
+		av_packet_unref(&packet);
+	}
+
+	pVVFormat->write_tailer(pOFCtx);
+
+fail:
+
+	pVVFormat->close_in_out_file(&pIFCtx, &pOFCtx);
+	pVVFormat->free_format_context(pIFCtx);
+	pVVFormat->free_format_context(pOFCtx);
+	delete pVVFormat;
+}
+
 int main() {
 //	testLocalVideo();
 
@@ -167,8 +232,9 @@ int main() {
 
 //	testSpeed();
 
+	testFormat();
 
-	testPureFilter();
+//	testPureFilter();
 	printf("hello world");
 	return 0;
 }
