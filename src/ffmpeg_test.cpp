@@ -15,6 +15,8 @@ using namespace std;
 #include "avfilter/VVFilterUtilPure.h"
 #include "avspeed/AVSpeed.h"
 #include "format/VVAVFormat.h"
+#include "codec/VVAVEncoder.h"
+#include "codec/VVAVDecoder.h"
 
 void testFilter()
 {
@@ -225,6 +227,229 @@ fail:
 	delete pVVFormat;
 }
 
+
+void testCodec(){
+	const char* in_file = "/home/mj/disk/videotest/2017/08/25/format_test.mp4";
+//	const char* out_file = "/home/mj/disk/videotest/2017/08/25/out_format.mp4";
+	const char* out_file_faststart = "/home/mj/disk/videotest/2017/08/25/out_codec_faststart.mp4";
+
+	VVAVFormat* pVVFormat = new VVAVFormat();
+	VVAVEncoder* pEncoder = new VVAVEncoder();
+	VVAVDecoder* pDecoder = new VVAVDecoder();
+
+
+	AVFormatContext* pIFCtx = pVVFormat->alloc_foramt_context();
+	AVFormatContext* pOFCtx = pVVFormat->alloc_foramt_context();
+
+	AVCodecContext* pADeCodecCtx = NULL;
+	AVCodecContext* pVDeCodecCtx = NULL;
+	AVCodecContext* pAEnCodecCtx = NULL;
+	AVCodecContext* pVEnCodecCtx = NULL;
+
+    int iAudioIndex;
+    int iVideoIndex;
+    int oAudioIndex;
+    int oVideoIndex;
+
+
+    AVStream* pVideoStream = NULL;
+    AVStream* pAudioStream = NULL;
+    int ret = 0;
+    int framerate;
+    int bitrate;
+
+	AVFrame* audioFrame = av_frame_alloc();
+	AVFrame* videoFrame = av_frame_alloc();
+
+	int got_picture;
+
+    ret = pVVFormat->open_input_file(&pIFCtx, in_file);
+
+    if(ret < 0){
+    	goto codecFail;
+    }
+
+    iAudioIndex = pVVFormat->find_audio_stream(pIFCtx);
+    iVideoIndex = pVVFormat->find_video_stream(pIFCtx);
+
+    pADeCodecCtx = pIFCtx->streams[iAudioIndex]->codec;
+    pVDeCodecCtx = pIFCtx->streams[iVideoIndex]->codec;
+
+//    ret = pDecoder->open_decoder(pADeCodecCtx);
+//    if(ret < 0){
+//    	goto codecFail;
+//    }
+
+    ret = pDecoder->open_decoder(pVDeCodecCtx);
+    if(ret < 0){
+    	goto codecFail;
+    }
+
+    ret = pVVFormat->alloc_output_context(&pOFCtx, out_file_faststart);
+
+    if(ret < 0){
+    	goto codecFail;
+    }
+
+//    pVideoStream = pVVFormat->add_stream(pOFCtx, pIFCtx->streams[iVideoIndex], false);
+//    pAudioStream = pVVFormat->add_stream(pOFCtx, pIFCtx->streams[iAudioIndex], false);
+
+	pVideoStream = pVVFormat->add_stream(pOFCtx, (AVCodecContext*)NULL, false);
+//    pAudioStream = pVVFormat->add_stream(pOFCtx, (AVCodecContext*)NULL, false);
+    pAudioStream = pVVFormat->add_stream(pOFCtx, pIFCtx->streams[iAudioIndex], true);
+
+    pVideoStream->time_base = pIFCtx->streams[iVideoIndex]->time_base;
+    pAudioStream->time_base = pIFCtx->streams[iAudioIndex]->time_base;
+
+
+    oAudioIndex = pAudioStream->index;
+    oVideoIndex = pVideoStream->index;
+
+
+    pAEnCodecCtx = pAudioStream->codec;
+    pVEnCodecCtx = pVideoStream->codec;
+
+    framerate = pVDeCodecCtx->framerate.num == 0 ?
+    		12 : pVDeCodecCtx->framerate.num / pVDeCodecCtx->framerate.den;
+
+    bitrate  = pVDeCodecCtx->bit_rate > 0 ? pVDeCodecCtx->bit_rate : 800*1000;
+
+    ret = pEncoder->init_and_open_video_encoder(pVEnCodecCtx, pVDeCodecCtx->codec_id,
+    		pVDeCodecCtx->width, pVDeCodecCtx->height, framerate, bitrate);
+
+    if(ret < 0){
+    	goto codecFail;
+    }
+
+//    ret = pEncoder->init_and_open_audio_encoder(pAEnCodecCtx, pADeCodecCtx->codec_id,
+//    		pADeCodecCtx->sample_rate, pADeCodecCtx->channels, pADeCodecCtx->bit_rate, 0);
+//
+//	if(ret < 0){
+//		goto codecFail;
+//	}
+
+	printf("ia:%d,iv:%d,oa:%d,ov:%d\n", iAudioIndex, iVideoIndex, oAudioIndex, oVideoIndex);
+
+	ret = pVVFormat->open_output_file(pOFCtx);
+	if(ret < 0){
+		goto codecFail;
+	}
+
+	ret = pVVFormat->write_mp4_header(pOFCtx, true);
+	if(ret < 0){
+		goto codecFail;
+	}
+
+	AVPacket rpacket;
+	AVPacket epacket;
+
+	av_init_packet(&epacket);
+
+	// 这里封装也是有问题的 应该按照时间戳大小封装
+	while(true){
+		if(pVVFormat->read_packet(pIFCtx, &rpacket) < 0){
+			break;
+		}
+
+		if(rpacket.stream_index == iAudioIndex){
+//			ret = pDecoder->decode_audio(pADeCodecCtx, audioFrame, &got_picture, &rpacket);
+//			if(ret >= 0 && got_picture){
+//				// 这里编码音频是错误的 应该按照音频编码需要的长度喂给编码器 因为是测试程序 所以这里就不写那么复杂了
+//				ret = pEncoder->encode_audio_frame(pAEnCodecCtx, &epacket, audioFrame, &got_picture);
+//				if(ret >= 0 && got_picture){
+//					epacket.stream_index = oAudioIndex;
+//					pVVFormat->write_packet(pOFCtx, epacket);
+//					av_packet_unref(&epacket);
+//				}
+//			}
+
+			rpacket.stream_index = oAudioIndex;
+			pVVFormat->write_packet(pOFCtx, rpacket);
+		}else if(rpacket.stream_index == iVideoIndex){
+
+			ret = pDecoder->decode_video(pVDeCodecCtx, videoFrame, &got_picture, &rpacket);
+			if(ret >= 0 && got_picture){
+				ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, videoFrame, &got_picture);
+				if(ret >= 0 && got_picture){
+					epacket.stream_index = oVideoIndex;
+					pVVFormat->write_packet(pOFCtx, epacket);
+					av_packet_unref(&epacket);
+				}
+			}
+		}
+
+		av_packet_unref(&rpacket);
+	}
+
+	while(true){
+		ret = pDecoder->flush_video_decoder(pVDeCodecCtx, videoFrame, &got_picture, &rpacket);
+		if(ret < 0 || !got_picture){
+			break;
+		}
+
+		ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, videoFrame, &got_picture);
+		if(ret >= 0 && got_picture){
+			epacket.stream_index = oVideoIndex;
+			pVVFormat->write_packet(pOFCtx, epacket);
+			av_packet_unref(&epacket);
+		}
+	}
+
+
+	while(true){
+		ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, NULL, &got_picture);
+		if(ret < 0 || !got_picture){
+			break;
+		}
+
+		epacket.stream_index = oVideoIndex;
+		pVVFormat->write_packet(pOFCtx, epacket);
+		av_packet_unref(&epacket);
+	}
+
+//	while(true){
+//		ret = pDecoder->flush_audio_decoder(pADeCodecCtx, audioFrame, &got_picture, &rpacket);
+//		if(ret < 0 || !got_picture){
+//			break;
+//		}
+//
+//		ret = pEncoder->encode_audio_frame(pAEnCodecCtx, &epacket, audioFrame, &got_picture);
+//		if(ret >= 0 && got_picture){
+//			epacket.stream_index = oAudioIndex;
+//			pVVFormat->write_packet(pOFCtx, epacket);
+//			av_packet_unref(&epacket);
+//		}
+//	}
+//
+//
+//	while(true){
+//		ret = pEncoder->encode_audio_frame(pAEnCodecCtx, &epacket, NULL, &got_picture);
+//		if(ret < 0 || !got_picture){
+//			break;
+//		}
+//
+//		epacket.stream_index = oAudioIndex;
+//		pVVFormat->write_packet(pOFCtx, epacket);
+//		av_packet_unref(&epacket);
+//	}
+
+
+	pVVFormat->write_tailer(pOFCtx);
+
+codecFail:
+
+	pEncoder->close_encoder(pVEnCodecCtx);
+//	pEncoder->close_encoder(pAEnCodecCtx);
+	pDecoder->close_decoder(pVDeCodecCtx);
+//	pDecoder->close_decoder(pADeCodecCtx);
+	pVVFormat->close_in_out_file(&pIFCtx, &pOFCtx);
+	pVVFormat->free_format_context(pIFCtx);
+	pVVFormat->free_format_context(pOFCtx);
+	delete pVVFormat;
+	delete pEncoder;
+	delete pDecoder;
+}
+
 int main() {
 //	testLocalVideo();
 
@@ -232,7 +457,9 @@ int main() {
 
 //	testSpeed();
 
-	testFormat();
+//	testFormat();
+
+	testCodec();
 
 //	testPureFilter();
 	printf("hello world");

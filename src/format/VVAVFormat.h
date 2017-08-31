@@ -37,7 +37,7 @@ public:
     int alloc_output_context(AVFormatContext** pFormatContext, const char* filename);
     AVStream* add_stream(AVFormatContext* pFormatContext, AVStream* pInStream, bool copyContext = true);
     AVStream* add_stream(AVFormatContext* pFormatContext, AVCodecContext* pCodecContext, bool copyContext = true);
-    int open_output_file(AVFormatContext* pFormatContext, const char* filename);
+    int open_output_file(AVFormatContext* pFormatContext);
     int close_output_file(AVFormatContext* pFormatContext);
 
 public:

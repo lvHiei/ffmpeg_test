@@ -106,9 +106,10 @@ int VVAVFormat::alloc_output_context(AVFormatContext **pFormatContext, const cha
 AVStream *VVAVFormat::add_stream(AVFormatContext *pFormatContext, AVStream *pInStream,
                                  bool copyContext)
 {
-    AVStream* out_stream = add_stream(pFormatContext, pInStream->codec, copyContext);
+    AVCodecContext* pCodecContext = pInStream == NULL ? NULL : pInStream->codec;
+    AVStream* out_stream = add_stream(pFormatContext, pCodecContext, copyContext);
 
-    if(out_stream){
+    if(out_stream && pInStream){
         out_stream->time_base = pInStream->time_base;
     }
 
@@ -144,7 +145,7 @@ AVStream* VVAVFormat::add_stream(AVFormatContext *pFormatContext, AVCodecContext
     return out_stream;
 }
 
-int VVAVFormat::open_output_file(AVFormatContext *pFormatContext, const char *filename)
+int VVAVFormat::open_output_file(AVFormatContext *pFormatContext)
 {
     int ret = 0;
 
@@ -154,9 +155,9 @@ int VVAVFormat::open_output_file(AVFormatContext *pFormatContext, const char *fi
 
     //打开输出文件
     if (!(ofmt->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&pFormatContext->pb, filename, AVIO_FLAG_WRITE);
+        ret = avio_open(&pFormatContext->pb, pFormatContext->filename, AVIO_FLAG_WRITE);
         if (ret < 0) {
-            LOGE("avio_open failed ret=%d,filename=%s", ret, filename);
+            LOGE("avio_open failed ret=%d,filename=%s", ret, pFormatContext->filename);
             return ret;
         }
     }
@@ -177,8 +178,6 @@ int VVAVFormat::close_output_file(AVFormatContext* pFormatContext)
             return ret;
         }
     }
-
-    avformat_free_context(pFormatContext);
 
     return 0;
 }
@@ -244,7 +243,7 @@ int VVAVFormat::open_in_out_file(AVFormatContext **pInputFormatContext, const ch
         oAudioIndex = out_audio_stream->index;
     }
 
-    ret = open_output_file(pOutFmtCtx, outfilename);
+    ret = open_output_file(pOutFmtCtx);
     if(ret < 0){
         return ret;
     }
