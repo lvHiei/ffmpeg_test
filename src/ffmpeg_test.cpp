@@ -15,6 +15,7 @@ using namespace std;
 #include "avfilter/VVFilterUtilPure.h"
 #include "avspeed/AVSpeed.h"
 #include "format/VVAVFormat.h"
+#include "format/Mp4Muxer.h"
 #include "codec/VVAVEncoder.h"
 #include "codec/VVAVDecoder.h"
 
@@ -450,6 +451,231 @@ codecFail:
 	delete pDecoder;
 }
 
+void testMp4Muxer(){
+	const char* in_file = "/home/disk/videotest/2017/09/06/1.mp4";
+	const char* out_file = "/home/disk/videotest/2017/09/06/mp4muxer.mp4";
+
+	VVAVFormat* pVVFormat = new VVAVFormat();
+	VVAVEncoder* pEncoder = new VVAVEncoder();
+	VVAVDecoder* pDecoder = new VVAVDecoder();
+
+	Mp4Muxer* pMuxer = new Mp4Muxer();
+
+
+	AVFormatContext* pIFCtx = pVVFormat->alloc_foramt_context();
+	AVFormatContext* pOFCtx = pVVFormat->alloc_foramt_context();
+
+	AVCodecContext* pADeCodecCtx = NULL;
+	AVCodecContext* pVDeCodecCtx = NULL;
+	AVCodecContext* pAEnCodecCtx = NULL;
+	AVCodecContext* pVEnCodecCtx = NULL;
+
+    int iAudioIndex;
+    int iVideoIndex;
+    int oAudioIndex;
+    int oVideoIndex;
+
+
+    AVStream* pVideoStream = NULL;
+    AVStream* pAudioStream = NULL;
+    int ret = 0;
+    int framerate;
+    int bitrate;
+
+	AVFrame* audioFrame = av_frame_alloc();
+	AVFrame* videoFrame = av_frame_alloc();
+
+	int got_picture;
+
+    ret = pVVFormat->open_input_file(&pIFCtx, in_file);
+
+    if(ret < 0){
+    	goto codecFail2;
+    }
+
+    iAudioIndex = pVVFormat->find_audio_stream(pIFCtx);
+    iVideoIndex = pVVFormat->find_video_stream(pIFCtx);
+
+    pADeCodecCtx = pIFCtx->streams[iAudioIndex]->codec;
+    pVDeCodecCtx = pIFCtx->streams[iVideoIndex]->codec;
+
+    ret = pDecoder->open_decoder(pVDeCodecCtx);
+    if(ret < 0){
+    	goto codecFail2;
+    }
+
+
+
+    framerate = pVDeCodecCtx->framerate.num == 0 ?
+    		12 : pVDeCodecCtx->framerate.num / pVDeCodecCtx->framerate.den;
+
+    bitrate  = pVDeCodecCtx->bit_rate > 0 ? pVDeCodecCtx->bit_rate : 800*1000;
+
+    pMuxer->init(out_file, pVDeCodecCtx->width, pVDeCodecCtx->height, framerate, bitrate, pIFCtx->streams[iVideoIndex]->time_base, NULL, 0);
+    pVEnCodecCtx = pMuxer->open();
+
+    ret = pEncoder->init_and_open_video_encoder(pVEnCodecCtx, pVDeCodecCtx->codec_id,
+    		pVDeCodecCtx->width, pVDeCodecCtx->height, framerate, bitrate);
+
+    if(ret < 0){
+    	goto codecFail2;
+    }
+	printf("ia:%d,iv:%d,oa:%d,ov:%d\n", iAudioIndex, iVideoIndex, oAudioIndex, oVideoIndex);
+
+
+
+	AVPacket rpacket;
+	AVPacket epacket;
+
+	av_init_packet(&epacket);
+
+	oVideoIndex = 0;
+	// 这里封装也是有问题的 应该按照时间戳大小封装
+	while(true){
+		if(pVVFormat->read_packet(pIFCtx, &rpacket) < 0){
+			break;
+		}
+
+		if(rpacket.stream_index == iAudioIndex){
+//			ret = pDecoder->decode_audio(pADeCodecCtx, audioFrame, &got_picture, &rpacket);
+//			if(ret >= 0 && got_picture){
+//				// 这里编码音频是错误的 应该按照音频编码需要的长度喂给编码器 因为是测试程序 所以这里就不写那么复杂了
+//				ret = pEncoder->encode_audio_frame(pAEnCodecCtx, &epacket, audioFrame, &got_picture);
+//				if(ret >= 0 && got_picture){
+//					epacket.stream_index = oAudioIndex;
+//					pVVFormat->write_packet(pOFCtx, epacket);
+//					av_packet_unref(&epacket);
+//				}
+//			}
+
+			rpacket.stream_index = oAudioIndex;
+//			pVVFormat->write_packet(pOFCtx, rpacket);
+		}else if(rpacket.stream_index == iVideoIndex){
+
+			ret = pDecoder->decode_video(pVDeCodecCtx, videoFrame, &got_picture, &rpacket);
+			if(ret >= 0 && got_picture){
+				videoFrame->pts = videoFrame->pkt_pts;
+				ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, videoFrame, &got_picture);
+				if(ret >= 0 && got_picture){
+					epacket.stream_index = oVideoIndex;
+//					pVVFormat->write_packet(pOFCtx, epacket);
+					pMuxer->write_packet(epacket.data, epacket.size, epacket.pts, epacket.dts);
+					av_packet_unref(&epacket);
+				}
+			}
+		}
+
+		av_packet_unref(&rpacket);
+	}
+
+	while(true){
+		ret = pDecoder->flush_video_decoder(pVDeCodecCtx, videoFrame, &got_picture, &rpacket);
+		if(ret < 0 || !got_picture){
+			break;
+		}
+
+		videoFrame->pts = videoFrame->pkt_pts;
+		ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, videoFrame, &got_picture);
+		if(ret >= 0 && got_picture){
+			epacket.stream_index = oVideoIndex;
+			pMuxer->write_packet(epacket.data, epacket.size, epacket.pts, epacket.dts);
+			av_packet_unref(&epacket);
+		}
+	}
+
+
+	while(true){
+		ret = pEncoder->encode_video_frame(pVEnCodecCtx, &epacket, NULL, &got_picture);
+		if(ret < 0 || !got_picture){
+			break;
+		}
+
+		epacket.stream_index = oVideoIndex;
+		pMuxer->write_packet(epacket.data, epacket.size, epacket.pts, epacket.dts);
+		av_packet_unref(&epacket);
+	}
+
+
+	pMuxer->close();
+
+codecFail2:
+
+	pEncoder->close_encoder(pVEnCodecCtx);
+//	pEncoder->close_encoder(pAEnCodecCtx);
+	pDecoder->close_decoder(pVDeCodecCtx);
+//	pDecoder->close_decoder(pADeCodecCtx);
+	pVVFormat->close_input_file(&pIFCtx);
+	pVVFormat->free_format_context(pIFCtx);
+	pVVFormat->free_format_context(pOFCtx);
+	delete pVVFormat;
+	delete pEncoder;
+	delete pDecoder;
+	delete pMuxer;
+
+//
+//
+//	VVAVFormat* pVVFormat = new VVAVFormat();
+//	Mp4Muxer* pMuxer = new Mp4Muxer();
+//
+//	av_log_set_level(AV_LOG_DEBUG);
+//
+//	AVFormatContext* pIFCtx = pVVFormat->alloc_foramt_context();
+//	AVFormatContext* pOFCtx = pVVFormat->alloc_foramt_context();
+//
+//    int iAudioIndex;
+//    int iVideoIndex;
+//    int oAudioIndex;
+//    int oVideoIndex;
+//
+//
+//    int ret = 0;
+//
+//    ret = pVVFormat->open_input_file(&pIFCtx, in_file);
+//
+//    iAudioIndex = pVVFormat->find_audio_stream(pIFCtx);
+//    iVideoIndex = pVVFormat->find_video_stream(pIFCtx);
+//
+//
+//	AVCodecContext* pCodecCtx = pIFCtx->streams[iVideoIndex]->codec;
+//
+//	printf("extradata:");
+//	for (int i =0 ; i< pCodecCtx->extradata_size; ++i){
+//		printf(" 0x%x", pCodecCtx->extradata[i]);
+//	}
+//
+//	printf("\n");
+//
+//    pMuxer->init(out_file, 360, 480, 15, 600*1000, pIFCtx->streams[iVideoIndex]->time_base, pCodecCtx->extradata, pCodecCtx->extradata_size);
+//	pMuxer->open();
+//
+//	AVPacket rpacket;
+//	av_init_packet(&rpacket);
+//
+//	// 这里封装也是有问题的 应该按照时间戳大小封装
+//	while(true){
+//		if(pVVFormat->read_packet(pIFCtx, &rpacket) < 0){
+//			break;
+//		}
+//
+//		if(rpacket.stream_index == iAudioIndex){
+//		}else if(rpacket.stream_index == iVideoIndex){
+//			pMuxer->write_packet(rpacket.data, rpacket.size, rpacket.pts, rpacket.dts);
+////			rpacket.stream_index = 0;
+////			pMuxer->write_packet(rpacket);
+//		}
+//
+//		av_packet_unref(&rpacket);
+//	}
+//
+//	pMuxer->close();
+//
+//	pVVFormat->close_input_file(&pIFCtx);
+//	pVVFormat->free_format_context(pIFCtx);
+//	pVVFormat->free_format_context(pOFCtx);
+//	delete pVVFormat;
+//	delete pMuxer;
+}
+
 int main() {
 //	testLocalVideo();
 
@@ -459,7 +685,9 @@ int main() {
 
 //	testFormat();
 
-	testCodec();
+//	testCodec();
+
+	testMp4Muxer();
 
 //	testPureFilter();
 	printf("hello world");
